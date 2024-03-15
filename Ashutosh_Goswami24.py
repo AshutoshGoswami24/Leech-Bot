@@ -1,16 +1,15 @@
 from pyrogram import Client, filters
 import subprocess
-from datetime import datetime
 import os
+from datetime import datetime
 from config import *
-
 # Initialize the bot
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 # Define a command handler
 @app.on_message(filters.command("start"))
-def start(client, message):
-    message.reply_text("Send me a URL and I will download and send you the file.")
+async def start(client, message):
+    await message.reply_text("Send me a URL and I will download and send you the file.")
 
 # Define a message handler for URLs
 @app.on_message(filters.regex(r'(https?://\S+)'))
@@ -48,6 +47,11 @@ async def aria2_download(url, message):
     )
 
     # Read and print output in real-time
+    async def progress_callback(current, total, message):
+        # Calculate progress percentage
+        progress = current / total * 100
+        await message.edit_text(f"Downloading... {progress:.2f}%")
+
     while True:
         output = proc.stdout.readline()  # type: ignore
         if output == b"" and proc.poll() is not None:
@@ -60,14 +64,18 @@ async def aria2_download(url, message):
 
     # Check if download was successful
     if proc.returncode == 0:
-        await upload_file(download_dir, message)
+        await upload_file(download_dir, message, progress_callback)
     else:
         await message.reply_text("Download failed.")
 
 # Define a function to upload the downloaded file
-async def upload_file(download_dir, message):
+async def upload_file(download_dir, message, progress_callback):
     try:
-        file_name = os.listdir(download_dir)[0]  # Get the downloaded file name
+        file_list = os.listdir(download_dir)
+        if not file_list:
+            raise FileNotFoundError("No files found in the specified directory.")
+        
+        file_name = file_list[0]  # Get the downloaded file name
         file_path = os.path.join(download_dir, file_name)
 
         # Upload the file with progress
@@ -80,14 +88,10 @@ async def upload_file(download_dir, message):
             await sent.reply_text("File uploaded successfully!")
     except Exception as e:
         await message.reply_text(f"Error uploading file: {str(e)}")
+        # Log the error for debugging purposes
+        print(f"Error uploading file: {str(e)}")
 
-# Define a progress callback function
-async def progress_callback(current, total, message):
-    # Calculate progress percentage
-    progress = current / total * 100
-    await message.edit_text(f"Uploading... {progress:.2f}%")
-
-print("𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝😁......")
+print("Bot started!")
 
 # Start the bot
 app.run()
