@@ -23,6 +23,12 @@ async def aria2_download(url, message):
     task_start = datetime.now()
     status_head = f"<b>📥 DOWNLOADING FROM » </b><i>🔗 Link</i>\n\n<b>🏷️ Name » </b><code>Downloading File</code>\n"
 
+    # Specify the directory where you want to save the downloaded file
+    download_dir = "./downloads"
+
+    # Create the directory if it doesn't exist
+    os.makedirs(download_dir, exist_ok=True)
+
     # Create a command to run aria2c with the link
     command = [
         "aria2c",
@@ -32,7 +38,7 @@ async def aria2_download(url, message):
         "--max-tries=3",
         "--console-log-level=notice",
         "-d",
-        "/path/to/save",  # Specify the path where you want to save the downloaded file
+        download_dir,
         url,
     ]
 
@@ -54,21 +60,32 @@ async def aria2_download(url, message):
 
     # Check if download was successful
     if proc.returncode == 0:
-        await upload_file("/path/to/save", message)
+        await upload_file(download_dir, message)
     else:
         await message.reply_text("Download failed.")
 
 # Define a function to upload the downloaded file
-async def upload_file(file_path, message):
+async def upload_file(download_dir, message):
     try:
-        await message.reply_text("Uploading file...")
-        await app.send_document(
+        file_name = os.listdir(download_dir)[0]  # Get the downloaded file name
+        file_path = os.path.join(download_dir, file_name)
+
+        # Upload the file with progress
+        async with app.send_document(
             chat_id=message.chat.id,
             document=file_path,
-        )
-        await message.reply_text("File uploaded successfully!")
+            progress=progress_callback,
+            progress_args=(message,)
+        ) as sent:
+            await sent.reply_text("File uploaded successfully!")
     except Exception as e:
         await message.reply_text(f"Error uploading file: {str(e)}")
+
+# Define a progress callback function
+async def progress_callback(current, total, message):
+    # Calculate progress percentage
+    progress = current / total * 100
+    await message.edit_text(f"Uploading... {progress:.2f}%")
 
 print("𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝😁......")
 
