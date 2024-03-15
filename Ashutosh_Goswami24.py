@@ -66,6 +66,7 @@ async def upload_file(file_path, message):
         document=file_path,
     )
     await message.reply_text("File uploaded successfully!")
+print("𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝😁......")
 
 # Start the bot
 app.run()
