@@ -17,15 +17,14 @@ async def direct_download_handler(client, message):
     url = message.matches[0].group(1)
     file_name = url.split("/")[-1]
     try:
-        file_path = await download_file(url, file_name, message)
-        sent_message = await app.send_document(message.chat.id, document=file_path)
-        await app.delete_messages(message.chat.id, sent_message.message_id)  # Delete the message after sending
+        file_path = await download_file(url, file_name)
+        await app.send_document(message.chat.id, document=file_path)
         os.remove(file_path)  # Delete the file after sending
     except Exception as e:
         await message.reply_text(f"Error: {e}")
 
 # Function to download the file from the direct link
-async def download_file(url: str, file_name: str, message) -> str:
+async def download_file(url: str, file_name: str) -> str:
     response = requests.get(url, stream=True)
     response.raise_for_status()  # Raise an exception for HTTP errors
     os.makedirs("./downloads", exist_ok=True)  # Create a downloads directory if it doesn't exist
@@ -36,15 +35,14 @@ async def download_file(url: str, file_name: str, message) -> str:
         for chunk in response.iter_content(chunk_size=8192):
             file.write(chunk)
             downloaded += len(chunk)
-            await update_progress_bar(message, downloaded, total_size)
+            await update_progress_bar(downloaded, total_size)
     return file_path
 
 # Function to update the progress bar
-async def update_progress_bar(message, downloaded, total_size):
+async def update_progress_bar(downloaded, total_size):
     progress = min(int(downloaded / total_size * 100), 100)
     await app.edit_message_text(
-        chat_id=message.chat.id,
-        message_id=message.message_id,
+        chat_id=await app.get_me().id,
         text=f"Downloading... {progress}%"
     )
 
