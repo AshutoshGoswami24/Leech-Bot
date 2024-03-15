@@ -1,3 +1,4 @@
+import asyncio
 import re
 import subprocess
 import logging
@@ -51,4 +52,3 @@ async def download_and_upload(url: str, message: Message):
 
 # Start the bot
 app.run()
-
