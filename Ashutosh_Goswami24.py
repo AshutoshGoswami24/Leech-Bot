@@ -19,7 +19,7 @@ async def direct_download_handler(client, message):
     try:
         file_path = await download_file(url, file_name, message)
         sent_message = await app.send_document(message.chat.id, document=file_path)
-        await sent_message.delete()  # Delete the message after sending
+        await app.delete_messages(message.chat.id, sent_message.message_id)  # Delete the message after sending
         os.remove(file_path)  # Delete the file after sending
     except Exception as e:
         await message.reply_text(f"Error: {e}")
