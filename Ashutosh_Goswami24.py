@@ -28,7 +28,8 @@ async def direct_download_handler(client, message):
 async def download_file(url: str, file_name: str, message) -> str:
     response = requests.get(url, stream=True)
     response.raise_for_status()  # Raise an exception for HTTP errors
-    file_path = f"/path/to/save/{file_name}"  # Change this to the desired save path
+    os.makedirs("./downloads", exist_ok=True)  # Create a downloads directory if it doesn't exist
+    file_path = f"./downloads/{file_name}"  # Save the file in the downloads directory
     with open(file_path, "wb") as file:
         total_size = int(response.headers.get('content-length', 0))
         downloaded = 0
