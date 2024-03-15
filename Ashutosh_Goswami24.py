@@ -37,6 +37,8 @@ async def download_file(url: str) -> str:
 # Function to upload the downloaded file
 async def upload_file(file_path: str, chat_id: int):
     try:
+        if not file_path or not os.path.exists(file_path):
+            raise ValueError("File path does not exist")
         await app.send_document(chat_id=chat_id, document=file_path)
     except Exception as e:
         logging.error(f"Error uploading file: {e}")
