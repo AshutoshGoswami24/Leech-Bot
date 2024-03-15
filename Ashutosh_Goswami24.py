@@ -17,7 +17,7 @@ async def direct_download_handler(client, message):
     url = message.matches[0].group(1)
     file_name = url.split("/")[-1]
     try:
-        file_path = download_file(url, file_name)
+        file_path = download_file(url, file_name, message)
         sent_message = await app.send_document(message.chat.id, document=file_path)
         await sent_message.delete()  # Delete the message after sending
         os.remove(file_path)  # Delete the file after sending
@@ -25,13 +25,27 @@ async def direct_download_handler(client, message):
         await message.reply_text(f"Error: {e}")
 
 # Function to download the file from the direct link
-def download_file(url: str, file_name: str) -> str:
-    response = requests.get(url)
+def download_file(url: str, file_name: str, message) -> str:
+    response = requests.get(url, stream=True)
     response.raise_for_status()  # Raise an exception for HTTP errors
     file_path = f"/path/to/save/{file_name}"  # Change this to the desired save path
     with open(file_path, "wb") as file:
-        file.write(response.content)
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            file.write(chunk)
+            downloaded += len(chunk)
+            await update_progress_bar(message, downloaded, total_size)
     return file_path
+
+# Function to update the progress bar
+async def update_progress_bar(message, downloaded, total_size):
+    progress = min(int(downloaded / total_size * 100), 100)
+    await app.edit_message_text(
+        chat_id=message.chat.id,
+        message_id=message.message_id,
+        text=f"Downloading... {progress}%"
+    )
 
 # Start the bot
 app.run()
