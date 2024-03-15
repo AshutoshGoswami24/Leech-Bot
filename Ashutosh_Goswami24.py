@@ -1,50 +1,66 @@
-import os
-import requests
 from pyrogram import Client, filters
+from pyrogram.types import Message
+import requests
+
 from config import *
 
-# Initialize the bot
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Define a command handler
-@app.on_message(filters.command("start"))
-async def start(client, message):
-    await message.reply_text("Send me a direct download link and I will send you the file.")
-
-# Define a message handler for direct download links
-@app.on_message(filters.regex(r'(https?://\S+)'))
-async def direct_download_handler(client, message):
-    url = message.matches[0].group(1)
-    file_name = url.split("/")[-1]
+# Function to download file from URL
+def download_file(url: str) -> bytes:
     try:
-        file_path = await download_file(url, file_name)
-        await app.send_document(message.chat.id, document=file_path)
-        os.remove(file_path)  # Delete the file after sending
+        message = app.send_message("me", "Downloading file... 📥")
+        response = requests.get(url, stream=True)
+        if response.status_code == 200:
+            total_size = int(response.headers.get('content-length', 0))
+            bytes_downloaded = 0
+            file_data = b""
+            for chunk in response.iter_content(chunk_size=1024):
+                bytes_downloaded += len(chunk)
+                message.edit_text(f"Downloading file... 📥\nProgress: {bytes_downloaded}/{total_size} bytes")
+                file_data += chunk
+            message.edit_text("Download complete! ✅")
+            return file_data
+        else:
+            message.edit_text("Failed to download file. ❌")
+            return None
     except Exception as e:
-        await message.reply_text(f"Error: {e}")
+        print("Error downloading file:", e)
+        message.edit_text("Failed to download file. ❌")
+        return None
 
-# Function to download the file from the direct link
-async def download_file(url: str, file_name: str) -> str:
-    response = requests.get(url, stream=True)
-    response.raise_for_status()  # Raise an exception for HTTP errors
-    os.makedirs("./downloads", exist_ok=True)  # Create a downloads directory if it doesn't exist
-    file_path = f"./downloads/{file_name}"  # Save the file in the downloads directory
-    with open(file_path, "wb") as file:
-        total_size = int(response.headers.get('content-length', 0))
-        downloaded = 0
-        for chunk in response.iter_content(chunk_size=8192):
-            file.write(chunk)
-            downloaded += len(chunk)
-            await update_progress_bar(downloaded, total_size)
-    return file_path
+# Function to upload file
+def upload_file(chat_id: int, file_data: bytes, file_name: str) -> Message:
+    try:
+        message = app.send_message(chat_id, "Uploading file... 📤")
+        uploaded_message = app.send_document(chat_id, document=file_data, filename=file_name)
+        if uploaded_message:
+            message.edit_text(f"File uploaded successfully as {uploaded_message.document.file_name}! ✅")
+            return uploaded_message
+        else:
+            message.edit_text("Failed to upload file. ❌")
+            return None
+    except Exception as e:
+        print("Error uploading file:", e)
+        message.edit_text("Failed to upload file. ❌")
+        return None
 
-# Function to update the progress bar
-async def update_progress_bar(downloaded, total_size):
-    progress = min(int(downloaded / total_size * 100), 100)
-    await app.edit_message_text(
-        chat_id=await app.get_me().id,
-        text=f"Downloading... {progress}%"
-    )
+# Handler for /start command
+@app.on_message(filters.command("start"))
+def start(client, message):
+    message.reply_text("Hello! Send me a URL and I'll download the file for you.")
 
-# Start the bot
+# Handler for messages containing a URL
+@app.on_message(filters.text & ~filters.command)
+def handle_message(client, message):
+    url = message.text.strip()
+    file_data = download_file(url)
+    if file_data:
+        uploaded_message = upload_file(message.chat.id, file_data, url.split('/')[-1])
+        if not uploaded_message:
+            message.reply_text("Failed to upload file.")
+    else:
+        message.reply_text("Failed to download file from provided URL.")
+
+# Run the bot
 app.run()
