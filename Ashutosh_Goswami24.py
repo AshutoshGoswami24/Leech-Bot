@@ -17,7 +17,7 @@ async def direct_download_handler(client, message):
     url = message.matches[0].group(1)
     file_name = url.split("/")[-1]
     try:
-        file_path = download_file(url, file_name, message)
+        file_path = await download_file(url, file_name, message)
         sent_message = await app.send_document(message.chat.id, document=file_path)
         await sent_message.delete()  # Delete the message after sending
         os.remove(file_path)  # Delete the file after sending
@@ -25,7 +25,7 @@ async def direct_download_handler(client, message):
         await message.reply_text(f"Error: {e}")
 
 # Function to download the file from the direct link
-def download_file(url: str, file_name: str, message) -> str:
+async def download_file(url: str, file_name: str, message) -> str:
     response = requests.get(url, stream=True)
     response.raise_for_status()  # Raise an exception for HTTP errors
     file_path = f"/path/to/save/{file_name}"  # Change this to the desired save path
