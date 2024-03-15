@@ -13,8 +13,8 @@ def delete_dht_cache():
         os.remove(dht_cache_file)
 
 # Function to show download progress
-async def show_download_progress(current, total, message):
-    percentage = (current / total) * 100
+async def show_download_progress(downloaded_bytes, total_file_size, message):
+    percentage = (downloaded_bytes / total_file_size) * 100
     await message.reply_text(f"Download Progress: {percentage:.2f}%")
 
 # Function to show upload progress
@@ -47,22 +47,21 @@ async def download_and_upload(url, message):
         command, bufsize=0, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
 
-    # Read and print output in real-time
+    total_file_size = 0
     while True:
-        output = proc.stdout.readline()  # type: ignore
-        if output == b"" and proc.poll() is not None:
+        line = proc.stdout.readline().decode("utf-8").strip()
+        if line.startswith("Total Length:"):
+            total_file_size = int(line.split(":")[1].strip())
+        elif line.startswith("Download complete"):
+            await show_download_progress(total_file_size, total_file_size, message)
             break
-        if output:
-            await show_download_progress(proc.stdout.tell(), total_file_size, message)
-
-    # Wait for the process to finish
-    proc.wait()
-
-    # Check if download was successful
-    if proc.returncode == 0:
-        await upload_file("/path/to/save", message)
-    else:
-        await message.reply_text("Download failed.")
+        elif line.startswith("[ERROR]"):
+            await message.reply_text("Download failed.")
+            break
+        else:
+            if line:
+                downloaded_bytes = int(line.split()[2])
+                await show_download_progress(downloaded_bytes, total_file_size, message)
 
 # Function to upload the downloaded file
 async def upload_file(file_path, message):
