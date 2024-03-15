@@ -1,8 +1,9 @@
 from pyrogram import Client, filters
 import subprocess
 from datetime import datetime
-from config import *
+import os
 
+# Initialize the bot
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 # Define a command handler
@@ -45,13 +46,25 @@ async def aria2_download(url, message):
         if output == b"" and proc.poll() is not None:
             break
         if output:
-            await on_output(output.decode("utf-8"), message, status_head, task_start)
+            await message.reply_text(status_head + output.decode("utf-8").strip())
 
-# Define a function to handle output from aria2c
-async def on_output(output: str, message, status_head, task_start):
-    # Process output from aria2c as needed
-    # You can send status updates back to the user here
-    pass
+    # Wait for the process to finish
+    proc.wait()
+
+    # Check if download was successful
+    if proc.returncode == 0:
+        await upload_file("/path/to/save", message)
+    else:
+        await message.reply_text("Download failed.")
+
+# Define a function to upload the downloaded file
+async def upload_file(file_path, message):
+    await message.reply_text("Uploading file...")
+    await app.send_document(
+        chat_id=message.chat.id,
+        document=file_path,
+    )
+    await message.reply_text("File uploaded successfully!")
 
 # Start the bot
 app.run()
