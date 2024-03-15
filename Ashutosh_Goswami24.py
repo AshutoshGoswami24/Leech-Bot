@@ -1,8 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import requests
-
-from config import *
+from config import api_id, api_hash, bot_token
 
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
@@ -45,13 +44,17 @@ def upload_file(chat_id: int, file_data: bytes, file_name: str) -> Message:
         message.edit_text("Failed to upload file. ❌")
         return None
 
+# Custom filter to check if message is a URL
+def is_url(msg: Message) -> bool:
+    return msg.text is not None and msg.text.startswith("http")
+
 # Handler for /start command
 @app.on_message(filters.command("start"))
 def start(client, message):
     message.reply_text("Hello! Send me a URL and I'll download the file for you.")
 
 # Handler for messages containing a URL
-@app.on_message(filters.text & ~filters.command)
+@app.on_message(filters.text & filters.create(is_url) & ~filters.command)
 def handle_message(client, message):
     url = message.text.strip()
     file_data = download_file(url)
