@@ -7,7 +7,7 @@ from pyrogram.types import Message
 from pyrogram.errors import FloodWait
 from config import *
 
-# Initialize the bot
+app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 app = Client("my_bot")
 
 # Define a command handler
