@@ -91,6 +91,7 @@ async def upload_file(download_dir, message, progress_callback):
         # Log the error for debugging purposes
         print(f"Error uploading file: {str(e)}")
 
+
 print("Bot started!")
 
 # Start the bot
