@@ -4,7 +4,6 @@ import subprocess
 from datetime import datetime
 from pyrogram import Client, filters
 from config import *
-
 # Initialize the bot
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
