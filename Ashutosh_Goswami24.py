@@ -60,12 +60,16 @@ async def aria2_download(url, message):
 
 # Define a function to upload the downloaded file
 async def upload_file(file_path, message):
-    await message.reply_text("Uploading file...")
-    await app.send_document(
-        chat_id=message.chat.id,
-        document=file_path,
-    )
-    await message.reply_text("File uploaded successfully!")
+    try:
+        await message.reply_text("Uploading file...")
+        await app.send_document(
+            chat_id=message.chat.id,
+            document=file_path,
+        )
+        await message.reply_text("File uploaded successfully!")
+    except Exception as e:
+        await message.reply_text(f"Error uploading file: {str(e)}")
+
 print("𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝😁......")
 
 # Start the bot
