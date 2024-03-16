@@ -1,52 +1,31 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
 import requests
-from config import api_id, api_hash, bot_token
 
-app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
+# Initialize the Pyrogram client
+app = Client("my_bot")
 
 # Function to download file from URL
 def download_file(url: str) -> bytes:
     try:
-        message = app.send_message("me", "Downloading file... 📥")
-        response = requests.get(url, stream=True)
+        response = requests.get(url)
         if response.status_code == 200:
-            total_size = int(response.headers.get('content-length', 0))
-            bytes_downloaded = 0
-            file_data = b""
-            for chunk in response.iter_content(chunk_size=1024):
-                bytes_downloaded += len(chunk)
-                message.edit_text(f"Downloading file... 📥\nProgress: {bytes_downloaded}/{total_size} bytes")
-                file_data += chunk
-            message.edit_text("Download complete! ✅")
-            return file_data
+            return response.content
         else:
-            message.edit_text("Failed to download file. ❌")
             return None
     except Exception as e:
         print("Error downloading file:", e)
-        message.edit_text("Failed to download file. ❌")
         return None
 
 # Function to upload file
-def upload_file(chat_id: int, file_data: bytes, file_name: str) -> Message:
+def upload_file(chat_id: int, file_data: bytes, file_name: str):
     try:
-        message = app.send_message(chat_id, "Uploading file... 📤")
-        uploaded_message = app.send_document(chat_id, document=file_data, filename=file_name)
-        if uploaded_message:
-            message.edit_text(f"File uploaded successfully as {uploaded_message.document.file_name}! ✅")
-            return uploaded_message
-        else:
-            message.edit_text("Failed to upload file. ❌")
-            return None
+        app.send_document(chat_id, document=file_data, file_name=file_name)
     except Exception as e:
         print("Error uploading file:", e)
-        message.edit_text("Failed to upload file. ❌")
-        return None
 
 # Custom filter to check if message is a URL
-def is_url(msg: Message) -> bool:
-    return msg.text is not None and msg.text.startswith("http")
+def is_url(text: str) -> bool:
+    return text.startswith("http")
 
 # Handler for /start command
 @app.on_message(filters.command("start"))
@@ -54,17 +33,18 @@ def start(client, message):
     message.reply_text("Hello! Send me a URL and I'll download the file for you.")
 
 # Handler for messages containing a URL
-@app.on_message(filters.text & ~filters.command & filters.create(is_url))
-
+@app.on_message(filters.text & ~filters.command)
 def handle_message(client, message):
     url = message.text.strip()
-    file_data = download_file(url)
-    if file_data:
-        uploaded_message = upload_file(message.chat.id, file_data, url.split('/')[-1])
-        if not uploaded_message:
-            message.reply_text("Failed to upload file.")
+    if is_url(url):
+        file_data = download_file(url)
+        if file_data:
+            upload_file(message.chat.id, file_data, url.split('/')[-1])
+            message.reply_text("File downloaded and uploaded successfully!")
+        else:
+            message.reply_text("Failed to download file from provided URL.")
     else:
-        message.reply_text("Failed to download file from provided URL.")
+        message.reply_text("Please provide a valid URL.")
 
 # Run the bot
 app.run()
