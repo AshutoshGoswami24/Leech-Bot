@@ -68,7 +68,7 @@ async def set_filename_callback(_, callback: CallbackQuery):
     await callback.message.reply_text("Please enter the desired filename for the downloaded file.")
 
 # Define message handler to receive filename input
-@app.on_message(filters.private & ~filters.command & filters.reply & filters.user(app.session.api_id))
+@app.on_message(filters.private & filters.text & ~filters.command)
 async def set_filename_message(client, message):
     if message.chat.id not in user_filename_input:
         return
