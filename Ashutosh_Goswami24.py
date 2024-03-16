@@ -54,7 +54,8 @@ def start(client, message):
     message.reply_text("Hello! Send me a URL and I'll download the file for you.")
 
 # Handler for messages containing a URL
-@app.on_message(filters.text & filters.create(is_url) & ~filters.command)
+@app.on_message(filters.text & ~filters.command & filters.create(is_url))
+
 def handle_message(client, message):
     url = message.text.strip()
     file_data = download_file(url)
