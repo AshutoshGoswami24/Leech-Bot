@@ -3,7 +3,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import requests
 import os
 import random
-
+from config import *
 # Load API credentials and bot token from the config file
 from config import api_id, api_hash, bot_token
 
