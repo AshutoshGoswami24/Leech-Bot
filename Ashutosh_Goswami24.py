@@ -1,50 +1,38 @@
 from pyrogram import Client, filters
+from pyrogram.types import Message
 import requests
+import os
+
+# Load API credentials and bot token from the config file
+from config import api_id, api_hash, bot_token
 
 # Initialize the Pyrogram client
-app = Client("my_bot")
+app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Function to download file from URL
-def download_file(url: str) -> bytes:
+# Define the command handler
+@app.on_message(filters.private & filters.command("download"))
+async def download_command_handler(client, message):
     try:
+        # Get the URL from the command message
+        url = message.text.split(maxsplit=1)[1]
+
+        # Download the file
         response = requests.get(url)
         if response.status_code == 200:
-            return response.content
+            file_name = url.split("/")[-1]
+            file_path = f"./downloads/{file_name}"
+            with open(file_path, "wb") as file:
+                file.write(response.content)
+
+            # Upload the file
+            await message.reply_document(document=file_path)
+
+            # Delete the downloaded file
+            os.remove(file_path)
         else:
-            return None
-    except Exception as e:
-        print("Error downloading file:", e)
-        return None
+            await message.reply_text("Failed to download the file.")
+    except IndexError:
+        await message.reply_text("Please provide a URL after the /download command.")
 
-# Function to upload file
-def upload_file(chat_id: int, file_data: bytes, file_name: str):
-    try:
-        app.send_document(chat_id, document=file_data, file_name=file_name)
-    except Exception as e:
-        print("Error uploading file:", e)
-
-# Custom filter to check if message is a URL
-def is_url(text: str) -> bool:
-    return text.startswith("http")
-
-# Handler for /start command
-@app.on_message(filters.command("start"))
-def start(client, message):
-    message.reply_text("Hello! Send me a URL and I'll download the file for you.")
-
-# Handler for messages containing a URL
-@app.on_message(filters.text & ~filters.command)
-def handle_message(client, message):
-    url = message.text.strip()
-    if is_url(url):
-        file_data = download_file(url)
-        if file_data:
-            upload_file(message.chat.id, file_data, url.split('/')[-1])
-            message.reply_text("File downloaded and uploaded successfully!")
-        else:
-            message.reply_text("Failed to download file from provided URL.")
-    else:
-        message.reply_text("Please provide a valid URL.")
-
-# Run the bot
+# Start the bot
 app.run()
