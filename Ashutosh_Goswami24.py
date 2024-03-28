@@ -2,11 +2,11 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 import requests
 import os
-from config import API_ID, API_HASH, BOT_TOKEN
+from config import *
 from tqdm import tqdm
 
 # Initialize the Pyrogram Client
-app = Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 # Function to handle /start command
 @app.on_message(filters.private & filters.command("start"))
