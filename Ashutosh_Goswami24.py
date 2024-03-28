@@ -1,93 +1,59 @@
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from pyrogram.types import Message
 import requests
 import os
-import random
-from config import *
-# Load API credentials and bot token from the config file
-from config import api_id, api_hash, bot_token
+from config import API_ID, API_HASH, BOT_TOKEN
+from tqdm import tqdm
 
-# Initialize the Pyrogram client
-app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
+# Initialize the Pyrogram Client
+app = Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Define the download function
-def download_file(url, file_name):
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.content
-    else:
-        return None
-
-# Define a dictionary to store user file name inputs
-user_filename_input = {}
-
-# Define the start command handler
-START_TXT = """<b>𝐇𝐞𝐥𝐥𝐨 {}, ɪ ᴀᴍ {}, ɪ ᴀᴍ ᴀ ᴄʜᴀᴛʙᴏᴛ ᴄʀᴇᴀᴛᴇᴅ ʙʏ ᴘᴀɴᴅᴀᴡᴇʙ. ᴀᴅᴅ ᴍᴇ ᴛᴏ ᴀɴʏ ɢʀᴏᴜᴘ ᴀɴᴅ ᴍᴀᴋᴇ ᴍᴇ ᴀɴ ᴀᴅᴍɪɴ, ᴛʜᴇɴ ᴄʜᴀᴛ ᴡɪᴛʜ ᴍᴇ ᴀs ᴀ ғʀɪᴇɴᴅ. 😊 [𝙈𝙮 𝘾𝙝𝙖𝙣𝙣𝙖𝙡](https://t.me/Pandawep)</b>"""
-
-@app.on_message(filters.command("start") & filters.incoming)
+# Function to handle /start command
+@app.on_message(filters.private & filters.command("start"))
 async def start_command(client, message):
-    buttons = [
-        [
-            InlineKeyboardButton('😎 Main Channel 😎', url='https://t.me/pandawep')
-        ],
-        [
-            InlineKeyboardButton('❤️ Chat Family ❤️', url='https://t.me/PandaWepChat')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(buttons)
-    me_mention = (await client.get_me()).mention
-    await message.reply_photo(
-        photo=random.choice(PICS),  # Assuming PICS is defined somewhere in your code
-        caption=START_TXT.format(message.from_user.mention, me_mention),
-        reply_markup=reply_markup,
-        parse_mode="html"
-    )
+    await message.reply_text("Welcome! Please enter the video URL:")
 
-# Define the download command handler
-@app.on_message(filters.command("download") & filters.incoming)
-async def download_command(client, message):
+# Function to handle messages containing URLs
+@app.on_message(filters.private)
+async def handle_message(client, message):
+    if message.text.startswith("http"):
+        url = message.text
+        try:
+            response = requests.get(url, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            file_name = url.split('/')[-1]
+            file_path = f'./{file_name}'
+            with open(file_path, 'wb') as file, tqdm(
+                desc=file_name,
+                total=total_size,
+                unit='B',
+                unit_scale=True,
+                unit_divisor=1024,
+                ascii=True
+            ) as progress_bar:
+                for data in response.iter_content(chunk_size=1024):
+                    file.write(data)
+                    progress_bar.update(len(data))
+            # Ask user for file name
+            await message.reply_text("Downloaded! Please enter the desired file name:")
+            await app.ask(message.chat.id, "new_file_name")
+        except Exception as e:
+            await message.reply_text(f'An error occurred: {e}')
+
+# Function to handle the new file name
+@app.on_message(filters.private & filters.regex(r'^[\w\-. ]+$'))
+async def handle_new_file_name(client, message):
+    new_file_name = message.text
+    file_path = f'./{message.reply_to_message.document.file_name}'
     try:
-        # Get the URL from the command message
-        url = message.text.split(maxsplit=1)[1]
-
-        # Store the URL for later use
-        user_filename_input[message.chat.id] = url
-
-        # Ask the user to set the filename through a button
-        await message.reply_text("Please click the button below to set the filename for the downloaded file.",
-                                  reply_markup=InlineKeyboardMarkup([
-                                      [InlineKeyboardButton("Set Filename", callback_data="set_filename")]
-                                  ]))
-    except IndexError:
-        await message.reply_text("Please provide a URL after the /download command.")
-
-# Define callback handler to set filename
-@app.on_callback_query(filters.regex("set_filename"))
-async def set_filename_callback(_, callback: CallbackQuery):
-    await callback.answer()
-    await callback.message.reply_text("Please enter the desired filename for the downloaded file.")
-
-# Define message handler to receive filename input
-@app.on_message(filters.private & filters.text & ~filters.command)
-async def set_filename_message(client, message):
-    if message.chat.id not in user_filename_input:
-        return
-    file_name = message.text.strip()
-    url = user_filename_input.pop(message.chat.id)
-    file_bytes = download_file(url, file_name)
-    if file_bytes:
-        # Save the file
-        file_path = f"./downloads/{file_name}"
-        with open(file_path, "wb") as file:
-            file.write(file_bytes)
-
-        # Upload the file
-        await message.reply_document(document=file_path)
-
-        # Delete the downloaded file
+        with open(file_path, 'rb') as file:
+            # Upload the file with the new name
+            await message.reply_document(document=file, file_name=new_file_name)
+    except Exception as e:
+        await message.reply_text(f'An error occurred while uploading the file: {e}')
+    finally:
+        # Clean up: delete the downloaded file
         os.remove(file_path)
-    else:
-        await message.reply_text("Failed to download the file.")
 
-# Start the bot
+# Run the bot
 app.run()
