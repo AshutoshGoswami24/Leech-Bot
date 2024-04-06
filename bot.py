@@ -1,59 +1,165 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message
-import requests
+import asyncio
 import os
+import pyrogram
+from pyrogram import Client, filters
+import httpx
+from moviepy.editor import VideoFileClip
+from natsort import natsorted
+import cv2
+from PIL import Image
+import psutil
+import pytz
+import requests
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import CallbackQuery
+import uvloop
+import GPUtil
 from config import *
-from tqdm import tqdm
 
-# Initialize the Pyrogram Client
+
+# Initialize asyncio loop with uvloop for better performance
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+loop = asyncio.get_event_loop()
+
+# Initialize Pyrogram client
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Function to handle /start command
-@app.on_message(filters.private & filters.command("start"))
-async def start_command(client, message):
-    await message.reply_text("Welcome! Please enter the video URL:")
 
-# Function to handle messages containing URLs
-@app.on_message(filters.private)
-async def handle_message(client, message):
-    if message.text.startswith("http"):
-        url = message.text
-        try:
-            response = requests.get(url, stream=True)
-            total_size = int(response.headers.get('content-length', 0))
-            file_name = url.split('/')[-1]
-            file_path = f'./{file_name}'
-            with open(file_path, 'wb') as file, tqdm(
-                desc=file_name,
-                total=total_size,
-                unit='B',
-                unit_scale=True,
-                unit_divisor=1024,
-                ascii=True
-            ) as progress_bar:
-                for data in response.iter_content(chunk_size=1024):
-                    file.write(data)
-                    progress_bar.update(len(data))
-            # Ask user for file name
-            await message.reply_text("Downloaded! Please enter the desired file name:")
-            await app.ask(message.chat.id, "new_file_name")
-        except Exception as e:
-            await message.reply_text(f'An error occurred: {e}')
+async def download_file(url):
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url)
+        filename = url.split("/")[-1]
+        with open(filename, 'wb') as f:
+            f.write(r.content)
+    return filename
 
-# Function to handle the new file name
-@app.on_message(filters.private & filters.regex(r'^[\w\-. ]+$'))
-async def handle_new_file_name(client, message):
-    new_file_name = message.text
-    file_path = f'./{message.reply_to_message.document.file_name}'
+
+async def rename_file(old_name, new_name):
+    os.rename(old_name, new_name)
+    return new_name
+
+
+async def upload_file(file_path, real_name, message):
+    caption = f"<{BOT.Options.caption}>{BOT.Setting.prefix} {real_name} {BOT.Setting.suffix}</{BOT.Options.caption}>"
+    type_ = fileType(file_path)
+
+    f_type = type_ if BOT.Options.stream_upload else "document"
+
+    # Upload the file
     try:
-        with open(file_path, 'rb') as file:
-            # Upload the file with the new name
-            await message.reply_document(document=file, file_name=new_file_name)
-    except Exception as e:
-        await message.reply_text(f'An error occurred while uploading the file: {e}')
-    finally:
-        # Clean up: delete the downloaded file
-        os.remove(file_path)
+        if f_type == "video":
+            # For Renaming to mp4
+            if not BOT.Options.stream_upload:
+                file_path = videoExtFix(file_path)
+            # Generate Thumbnail and Get Duration
+            thmb_path, seconds = thumbMaintainer(file_path)
+            with Image.open(thmb_path) as img:
+                width, height = img.size
 
-# Run the bot
+            sent_msg = await message.reply_video(
+                video=file_path,
+                supports_streaming=True,
+                width=width,
+                height=height,
+                caption=caption,
+                thumb=thmb_path,
+                duration=int(seconds),
+                progress=progress_bar,
+                reply_to_message_id=message.id,
+            )
+
+        elif f_type == "audio":
+            thmb_path = None if not ospath.exists(Paths.THMB_PATH) else Paths.THMB_PATH
+            sent_msg = await message.reply_audio(
+                audio=file_path,
+                caption=caption,
+                thumb=thmb_path,
+                progress=progress_bar,
+                reply_to_message_id=message.id,
+            )
+
+        elif f_type == "document":
+            if ospath.exists(Paths.THMB_PATH):
+                thmb_path = Paths.THMB_PATH
+            elif type_ == "video":
+                thmb_path, _ = thumbMaintainer(file_path)
+            else:
+                thmb_path = None
+
+            sent_msg = await message.reply_document(
+                document=file_path,
+                caption=caption,
+                thumb=thmb_path,
+                progress=progress_bar,
+                reply_to_message_id=message.id,
+            )
+
+        elif f_type == "photo":
+            sent_msg = await message.reply_photo(
+                photo=file_path,
+                caption=caption,
+                progress=progress_bar,
+                reply_to_message_id=message.id,
+            )
+
+        return sent_msg
+
+    except Exception as e:
+        print("Error uploading file:", e)
+
+
+@app.on_message(filters.command("run"))
+async def run_command(client, message):
+    chat_id = message.chat.id
+    msg = await message.reply_text("Please send the URL of the file you want to download.")
+    await app.send_chat_action(chat_id, "typing")
+
+    @app.on_message(filters.text)
+    async def process_url(client, message):
+        url = message.text
+        await message.delete()
+        await msg.delete()
+        await app.send_chat_action(chat_id, "typing")
+        filename = await download_file(url)
+        await app.send_message(chat_id, f"Downloaded file: {filename}")
+
+        # Show inline keyboard with options to change name or upload
+        keyboard = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("Change Name", callback_data="change_name")],
+                [InlineKeyboardButton("Upload", callback_data="upload")]
+            ]
+        )
+        await app.send_message(chat_id, "Choose an action:", reply_markup=keyboard)
+
+    @app.on_callback_query()
+    async def button(client, callback: CallbackQuery):
+        message = callback.message
+        chat_id = message.chat.id
+        data = callback.data
+        await message.delete()
+        if data == "change_name":
+            await app.send_message(chat_id, "Please enter the new file name.")
+            await app.send_chat_action(chat_id, "typing")
+
+            @app.on_message(filters.text)
+            async def process_new_name(client, message):
+                new_name = message.text
+                await message.delete()
+                await app.send_chat_action(chat_id, "typing")
+                new_filename = await rename_file(filename, new_name)
+                await app.send_message(chat_id, f"File renamed to: {new_filename}")
+                sent_msg = await upload_file(new_filename, new_name, message)
+                # Cleanup
+                os.remove(new_filename)
+                await app.stop()
+                
+        elif data == "upload":
+            await app.send_chat_action(chat_id, "typing")
+            sent_msg = await upload_file(filename, filename, message)
+            # Cleanup
+            os.remove(filename)
+            await app.stop()
+
+# Start the bot
 app.run()
