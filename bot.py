@@ -11,11 +11,10 @@ import psutil
 import pytz
 import requests
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.types import CallbackQuery
+from pyrogram.types import CallbackQuery, ForceReply
 import uvloop
 import GPUtil
 from config import *
-
 
 # Initialize asyncio loop with uvloop for better performance
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -120,6 +119,8 @@ async def run_command(client, message):
         await message.delete()
         await msg.delete()
         await app.send_chat_action(chat_id, "typing")
+        download_msg = await message.reply_text("Downloading...")
+
         filename = await download_file(url)
         await app.send_message(chat_id, f"Downloaded file: {filename}")
 
@@ -139,10 +140,10 @@ async def run_command(client, message):
         data = callback.data
         await message.delete()
         if data == "change_name":
-            await app.send_message(chat_id, "Please enter the new file name.")
+            await app.send_message(chat_id, "Please enter the new file name.", reply_markup=ForceReply(True))
             await app.send_chat_action(chat_id, "typing")
 
-            @app.on_message(filters.text)
+            @app.on_message(filters.reply)
             async def process_new_name(client, message):
                 new_name = message.text
                 await message.delete()
