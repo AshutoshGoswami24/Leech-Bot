@@ -1,4 +1,13 @@
 Pyrogram==2.0.106
-TgCrypto
+asyncio
+GPUtil
+httpx
+moviepy
+natsort
+opencv-python
+Pillow
+psutil
+pytz
 requests
-tqdm
+tgcrypto
+uvloop
